@@ -148,11 +148,13 @@ class Game:
                 is_furthest = True
                 if is_overshoot:
                     if player == 1:
-                        for i in range(start_index -1, -1, -1): # Check points behind start
+                        # Check points HIGHER than start_index (closer to point 24)
+                        for i in range(start_index + 1, 24):
                             if self.board_points[i] > 0: is_furthest = False; break
                     else: # player == -1
-                        for i in range(start_index + 1, 24): # Check points behind start
-                             if self.board_points[i] < 0: is_furthest = False; break
+                        # Check points LOWER than start_index (closer to point -1)
+                        for i in range(start_index - 1, -1, -1):
+                            if self.board_points[i] < 0: is_furthest = False; break
 
                 if is_exact_roll or (is_overshoot and is_furthest):
                     return True, actual_target_for_bear_off

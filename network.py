@@ -1,6 +1,7 @@
 import socket
 import pickle
 import sys
+import errno # Import errno
 
 class Network:
     def __init__(self):
@@ -55,7 +56,11 @@ class Network:
              # print("Socket timeout during receive") # Expected during non-blocking
              return None # No data available right now
         except socket.error as e:
-            print(f"Receive Error: {e}")
+            # Check for WSAEWOULDBLOCK on Windows (expected non-blocking error)
+            if sys.platform == 'win32' and e.winerror == errno.WSAEWOULDBLOCK:
+                pass # Ignore this specific error, it's expected
+            else:
+                print(f"Receive Error: {e}") # Print other socket errors
             return None
         except (pickle.UnpicklingError, ValueError, EOFError) as e:
             print(f"Unpickling Error or Corrupt Data: {e}")
