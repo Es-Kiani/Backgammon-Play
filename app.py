@@ -560,10 +560,9 @@ class App:
 
     def _update(self):
         """Updates game state, animations, and network status."""
-        # --- Network Receive ---\
-        if self.network and not self.is_rolling_animation and self.game_phase not in [
-            'MAIN_MENU', 'GETTING_IP', 'WAITING_FOR_STATE',
-            'HOSTING_SETUP', 'WAITING_FOR_CLIENT', 'CONNECTING']:
+        # Check network unless waiting for specific network phases
+        network_active_phases = ['ROLLING', 'MOVING', 'ROLLING_ANIMATION', 'NO_MOVES_FEEDBACK', 'GAME_OVER', 'WAITING_FOR_STATE']
+        if self.network and self.game_phase in network_active_phases:
             received_data = self.network.receive()
             if received_data:
                 # print("Received state from opponent.")
@@ -577,7 +576,18 @@ class App:
                     self.valid_destination_indices.clear()
                     self.is_rolling_animation = False
 
-        # --- Phase-Specific Updates ---\
+                # ---- ADDED CHECK ----
+                # If the received state makes it our turn, ensure phase is ROLLING
+                # (Unless the game just ended)
+                elif self.game.current_player == self.player_id and self.game_phase != 'ROLLING' and self.game_phase != 'GAME_OVER':
+                    print(f"Received state making it Player {self.player_id}'s turn. Setting phase to ROLLING.")
+                    self.game_phase = 'ROLLING'
+                    # Reset selection state when turn switches back
+                    self.selected_point_index = None
+                    self.valid_destination_indices.clear()
+                # ---- END ADDED CHECK ----
+
+        # --- Phase-Specific Updates ---
         if self.game_phase == 'WAITING_FOR_CLIENT':
             self._update_waiting_for_client()
         elif self.game_phase == 'CONNECTING':
