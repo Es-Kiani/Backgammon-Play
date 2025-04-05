@@ -560,9 +560,10 @@ class App:
 
     def _update(self):
         """Updates game state, animations, and network status."""
-        # Handle state updates during active gameplay (NOT initial state)
-        network_gameplay_phases = ['ROLLING', 'MOVING', 'ROLLING_ANIMATION', 'NO_MOVES_FEEDBACK', 'GAME_OVER']
-        if self.network and self.game_phase in network_gameplay_phases:
+        # --- Network Receive ---\
+        if self.network and not self.is_rolling_animation and self.game_phase not in [
+            'MAIN_MENU', 'GETTING_IP', 'WAITING_FOR_STATE',
+            'HOSTING_SETUP', 'WAITING_FOR_CLIENT', 'CONNECTING']:
             received_data = self.network.receive()
             if received_data:
                 # print("Received state from opponent.")
@@ -576,30 +577,13 @@ class App:
                     self.valid_destination_indices.clear()
                     self.is_rolling_animation = False
 
-                # ---- ADDED CHECK ----
-                # If the received state makes it our turn, ensure phase is ROLLING
-                # (Unless the game just ended)
-                elif self.game.current_player == self.player_id and self.game_phase != 'ROLLING' and self.game_phase != 'GAME_OVER':
-                    print(f"Received state making it Player {self.player_id}'s turn. Setting phase to ROLLING.")
-                    self.game_phase = 'ROLLING'
-                    # Reset selection state when turn switches back
-                    self.selected_point_index = None
-                    self.valid_destination_indices.clear()
-                # ---- END ADDED CHECK ----
-
-        elif self.game_phase == 'WAITING_FOR_STATE': # Handle initial state receive specifically
-            if not self.network:
-                 self.game_phase = 'MAIN_MENU'
-                 self.network_error = "Connection lost unexpectedly."
-                 return
-
-            received_state = self.network.receive()
-            if received_state:
-                print("Initial state received, starting game.")
-                self.game.apply_state(received_state)
-                self.game_start_time = pygame.time.get_ticks()
-                self.game_phase = 'ROLLING' # Transition to gameplay
-
+        # --- Phase-Specific Updates ---\
+        if self.game_phase == 'WAITING_FOR_CLIENT':
+            self._update_waiting_for_client()
+        elif self.game_phase == 'CONNECTING':
+            self._update_connecting()
+        elif self.game_phase == 'WAITING_FOR_STATE':
+            self._update_waiting_for_state()
         elif self.game_phase == 'ROLLING_ANIMATION':
             self._update_animation() # Updates internal animation state
 
@@ -659,8 +643,7 @@ class App:
             draw_sidebar(self.screen, self.game_phase, self.game.current_player,
                          self.is_rolling_animation, self.animation_dice, self.game.dice,
                          self.game_start_time, self.game.board_points, self.connection_status,
-                         self.game.white_borne_off, self.game.black_borne_off,
-                         self.player_id)
+                         self.game.white_borne_off, self.game.black_borne_off)
 
             # Draw Game Over screen if applicable
             if self.game_phase == 'GAME_OVER' and self.game.winner != 0:
@@ -776,15 +759,45 @@ class App:
                 self._handle_click(event.pos)
 
     # --- Update Sub-Methods ---
+    def _update_waiting_for_client(self):
+        if self.server_thread and not self.server_thread.is_alive():
+            if self.network and self.network.conn:
+                self.player_id = 1
+                self.connection_status = f"Hosting | Client Connected | You: White (P{self.player_id})"
+                self.game.reset()
+                self.game_start_time = pygame.time.get_ticks()
+                self._send_game_state() # Send initial state
+                self.game_phase = 'ROLLING'
+                self.network_error = None
+            else:
+                self.network_error = "Failed to start server or accept connection."
+                self.game_phase = 'HOSTING_SETUP'
+                if self.network: self.network.close()
+                self.network = None
+            self.server_thread = None
+
     def _update_connecting(self):
         if self.connection_result == 'success':
             self.player_id = self.assigned_player_id_temp
-            # Player ID is set, status updated below
-            self.game_phase = 'WAITING_FOR_STATE' # Now wait for initial state
             self.connection_status = f"Connected | You: Black (P{self.player_id})"
+            self.game_phase = 'WAITING_FOR_STATE'
         elif self.connection_result == 'failed':
             self.network_error = f"Failed to connect to {self.connection_target_ip}"
             self.game_phase = 'GETTING_IP' # Go back to IP input
+
+    def _update_waiting_for_state(self):
+        if not self.network: # Should not happen, but safety check
+             self.game_phase = 'MAIN_MENU'
+             self.network_error = "Connection lost unexpectedly."
+             return
+
+        received_state = self.network.receive()
+        if received_state:
+            self.game.apply_state(received_state)
+            self.game_start_time = pygame.time.get_ticks()
+            self.game_phase = 'ROLLING'
+            print("Initial state received, starting game.")
+        # Note: Simple quit check is handled in _handle_events
 
     def _attempt_roll(self):
         """Handles the logic sequence for rolling the dice."""
