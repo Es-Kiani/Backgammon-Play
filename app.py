@@ -6,6 +6,7 @@ import random # Used by _update_animation
 import time
 import socket # For getting local IP
 import threading # For non-blocking server start
+import yaml  # Add YAML import
 from network import Network # Import the class directly
 from game import Game
 
@@ -30,6 +31,19 @@ class App:
        and coordinates between the Game, UI, and Network components."""
 
     def __init__(self):
+        # Load configuration
+        try:
+            with open('config.yaml', 'r') as f:
+                self.config = yaml.safe_load(f)
+        except FileNotFoundError:
+            print("Warning: config.yaml not found. Using default values.")
+            self.config = {
+                'network': {
+                    'default_host_ip': '127.0.0.1',
+                    'default_port': 5555
+                }
+            }
+
         # Pygame setup
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -66,11 +80,11 @@ class App:
 
         # Menu/Input state
         self.local_ips = []
-        self.host_port_default = 5555
+        self.host_port_default = self.config['network']['default_port']
         self.input_active = False
         self.input_text = ""
         self.input_prompt = ""
-        self.host_ip_input = ""
+        self.host_ip_input = self.config['network']['default_host_ip']  # Use default from config
         self.host_port_input = str(self.host_port_default)
         self.active_input_box = None
 
