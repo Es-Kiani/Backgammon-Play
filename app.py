@@ -74,6 +74,10 @@ class App:
         self.host_port_input = str(self.host_port_default)
         self.active_input_box = None
 
+        # State for showing "No Moves" feedback
+        self.pending_no_moves_switch = False
+        self.no_moves_phase_start_time = 0
+
     def _handle_click(self, pos):
         """Handles BOARD clicks for selecting/moving checkers."""
         # Assumes it's the current player's turn and they clicked on the board area.
@@ -112,13 +116,61 @@ class App:
                 if potential_selection != -1:
                     self.selected_point_index = potential_selection
                     self.valid_destination_indices.clear()
+                    player = self.game.current_player # Cache player
+
+                    # --- Check individual die moves ---
                     for die_roll in set(self.game.moves_left): # Use set to check unique rolls
                         is_valid, target_idx = self.game.is_move_valid(self.selected_point_index, die_roll)
                         if is_valid:
                             self.valid_destination_indices.add(target_idx)
+
+                    # --- Check sum move (only if non-doubles and both dice available) ---
+                    if len(self.game.moves_left) == 2 and self.game.dice[0] != self.game.dice[1]:
+                        d1, d2 = self.game.dice[0], self.game.dice[1]
+                        start_idx = self.selected_point_index
+                        sum_move_valid = False
+                        final_sum_target = -99
+
+                        # Check path d1 then d2
+                        is_valid_inter1, inter1 = self.game.is_move_valid(start_idx, d1)
+                        # Check if intermediate move is valid AND lands on the board (not bear off)
+                        if is_valid_inter1 and 0 <= inter1 <= 23:
+                            # Temporarily modify state to check validity of second step
+                            board_backup = list(self.game.board_points)
+                            moves_backup = list(self.game.moves_left)
+                            self.game.board_points[start_idx] -= player
+                            self.game.board_points[inter1] += player # Assume no hit for temp check
+                            self.game.moves_left = [d2]
+                            is_valid_final1, final1 = self.game.is_move_valid(inter1, d2)
+                            # Restore state
+                            self.game.board_points = board_backup
+                            self.game.moves_left = moves_backup
+                            if is_valid_final1:
+                                sum_move_valid = True
+                                final_sum_target = final1
+
+                        # Check path d2 then d1 (only if path 1 wasn't valid)
+                        if not sum_move_valid:
+                            is_valid_inter2, inter2 = self.game.is_move_valid(start_idx, d2)
+                            if is_valid_inter2 and 0 <= inter2 <= 23:
+                                board_backup = list(self.game.board_points)
+                                moves_backup = list(self.game.moves_left)
+                                self.game.board_points[start_idx] -= player
+                                self.game.board_points[inter2] += player # Assume no hit for temp check
+                                self.game.moves_left = [d1]
+                                is_valid_final2, final2 = self.game.is_move_valid(inter2, d1)
+                                # Restore state
+                                self.game.board_points = board_backup
+                                self.game.moves_left = moves_backup
+                                if is_valid_final2:
+                                    sum_move_valid = True
+                                    final_sum_target = final2
+
+                        if sum_move_valid:
+                            self.valid_destination_indices.add(final_sum_target)
+
                 else:
-                     self.selected_point_index = None
-                     self.valid_destination_indices.clear()
+                    self.selected_point_index = None
 
             # --- Action 2: Move a selected checker ---\
             elif self.selected_point_index is not None: # Only proceed if a checker is already selected
@@ -149,6 +201,73 @@ class App:
                             moved = self.game.make_move(self.selected_point_index, die_roll)
                             break
 
+                # --- Try Sum Move (if single move didn't happen and non-doubles available) ---
+                if not moved and len(self.game.moves_left) == 2 and self.game.dice[0] != self.game.dice[1]:
+                    d1, d2 = self.game.dice[0], self.game.dice[1]
+                    start_idx = self.selected_point_index
+                    player = self.game.current_player
+
+                    # --- Re-validate and execute Path d1 then d2 ---
+                    is_valid_inter1, inter1 = self.game.is_move_valid(start_idx, d1)
+                    if is_valid_inter1 and 0 <= inter1 <= 23:
+                        # Temporarily apply first move to check second
+                        board_backup = list(self.game.board_points)
+                        moves_backup = list(self.game.moves_left)
+                        # Simulate first move (simplified, no hit check needed here for validation)
+                        self.game.board_points[start_idx] -= player
+                        self.game.board_points[inter1] += player
+                        self.game.moves_left = [d2]
+                        is_valid_final1, final1 = self.game.is_move_valid(inter1, d2)
+                        # Restore state
+                        self.game.board_points = board_backup
+                        self.game.moves_left = moves_backup
+
+                        if is_valid_final1 and final1 == move_target_index:
+                            print(f"Executing sum move ({d1} then {d2})")
+                            # Execute first part (handles hits properly)
+                            move1_success = self.game.make_move(start_idx, d1)
+                            if move1_success:
+                                # Calculate actual intermediate landing spot (important if hit occurred)
+                                actual_inter1 = self.game._get_target_index(start_idx, d1, player)
+                                # Execute second part from the actual intermediate spot
+                                move2_success = self.game.make_move(actual_inter1, d2)
+                                if move2_success:
+                                    moved = True # Mark as successfully moved
+                                else:
+                                    # This case is tricky - move 1 happened, move 2 failed
+                                    # For now, let the turn potentially end if no other moves
+                                    print("WARN: Second part of sum move failed!")
+                                    pass # moved remains False
+                            else:
+                                print("WARN: First part of sum move failed!")
+
+                    # --- Re-validate and execute Path d2 then d1 (if path 1 failed or wasn't the target) ---
+                    if not moved:
+                        is_valid_inter2, inter2 = self.game.is_move_valid(start_idx, d2)
+                        if is_valid_inter2 and 0 <= inter2 <= 23:
+                            board_backup = list(self.game.board_points)
+                            moves_backup = list(self.game.moves_left)
+                            self.game.board_points[start_idx] -= player
+                            self.game.board_points[inter2] += player
+                            self.game.moves_left = [d1]
+                            is_valid_final2, final2 = self.game.is_move_valid(inter2, d1)
+                            self.game.board_points = board_backup
+                            self.game.moves_left = moves_backup
+
+                            if is_valid_final2 and final2 == move_target_index:
+                                print(f"Executing sum move ({d2} then {d1})")
+                                move1_success = self.game.make_move(start_idx, d2)
+                                if move1_success:
+                                    actual_inter2 = self.game._get_target_index(start_idx, d2, player)
+                                    move2_success = self.game.make_move(actual_inter2, d1)
+                                    if move2_success:
+                                        moved = True
+                                    else:
+                                        print("WARN: Second part of sum move failed!")
+                                        pass
+                                else:
+                                    print("WARN: First part of sum move failed!")
+
                 if moved:
                     # Move was successful, reset UI selection state
                     self.selected_point_index = None
@@ -160,16 +279,16 @@ class App:
                         if self.network: self._send_game_state() # Send final winning state
                         return # End turn processing
 
-                    # If moves left is now empty, prepare to switch turn and send state
-                    if not self.game.moves_left:
+                    # After a move, check if any *further* moves are possible with remaining dice
+                    can_move_further = self.game.can_player_move()
+
+                    # If moves left is now empty OR no further moves are possible, switch turn
+                    if not self.game.moves_left or not can_move_further:
+                        if not can_move_further and self.game.moves_left:
+                             print(f"No valid moves left for Player {self.game.current_player} with remaining dice {self.game.moves_left}. Ending turn.")
                         if self.network:
                             self._send_game_state(switch_player=True)
                         self.game.switch_player() # Switch player in game state
-                        self.game_phase = 'ROLLING'
-                    else:
-                        # Moves remain, just send the current state without switching turn
-                        if self.network:
-                            self._send_game_state(switch_player=False)
 
     def _update_animation(self):
         """Update the dice animation state."""
@@ -188,10 +307,20 @@ class App:
             # End animation after duration
             if elapsed_time >= ANIMATION_DURATION:
                 self.is_rolling_animation = False
-                self.game_phase = 'MOVING'
-                # Send the state with the final dice roll AFTER animation finishes
-                if self.network:
-                    self._send_game_state(switch_player=False)
+                # Check if we need to switch turn due to no moves
+                if self.pending_no_moves_switch:
+                    self.game_phase = 'NO_MOVES_FEEDBACK'
+                    self.no_moves_phase_start_time = pygame.time.get_ticks()
+                    self.pending_no_moves_switch = False # Reset flag
+                    # Send current state (with dice), but don't switch player yet
+                    if self.network:
+                        self._send_game_state(switch_player=False)
+                else:
+                    # Normal case: moves are possible
+                    self.game_phase = 'MOVING'
+                    # Send the state with the final dice roll AFTER animation finishes
+                    if self.network:
+                        self._send_game_state(switch_player=False)
 
     def _send_game_state(self, switch_player=False):
         """Sends the current game state via the network."""
@@ -458,6 +587,15 @@ class App:
         elif self.game_phase == 'ROLLING_ANIMATION':
             self._update_animation() # Updates internal animation state
 
+        elif self.game_phase == 'NO_MOVES_FEEDBACK':
+            current_time = pygame.time.get_ticks()
+            if current_time - self.no_moves_phase_start_time >= 2000: # 2 seconds delay
+                print("Feedback delay over. Switching turn.")
+                if self.network:
+                    self._send_game_state(switch_player=True)
+                self.game.switch_player()
+                self.game_phase = 'ROLLING'
+
     def _draw(self):
         """Draws the entire screen based on the current game phase."""
         # Default background or board background
@@ -505,7 +643,8 @@ class App:
             draw_sidebar(self.screen, self.game_phase, self.game.current_player,
                          self.is_rolling_animation, self.animation_dice, self.game.dice,
                          self.game_start_time, self.game.board_points, self.connection_status,
-                         self.game.white_borne_off, self.game.black_borne_off)
+                         self.game.white_borne_off, self.game.black_borne_off,
+                         self.player_id)
 
             # Draw Game Over screen if applicable
             if self.game_phase == 'GAME_OVER' and self.game.winner != 0:
@@ -619,10 +758,6 @@ class App:
             # Board Clicks
             elif is_my_turn and self.game_phase == 'MOVING' and event.pos[0] < SIDEBAR_X_START:
                 self._handle_click(event.pos)
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_t: # Test Key
-                self.game.winner = 1
-                self.game_phase = 'GAME_OVER'
 
     # --- Update Sub-Methods ---
     def _update_waiting_for_client(self):
@@ -674,13 +809,14 @@ class App:
             self.animation_dice[:] = self.game.dice # Copy dice for animation
 
             if not self.game.can_player_move():
-                print(f"No valid moves for {'White' if self.game.current_player == 1 else 'Black'} with roll {self.game.dice}. Skipping turn.")
-                self.is_rolling_animation = False
-                if self.network: self._send_game_state(switch_player=True)
-                self.game.switch_player()
-                self.game_phase = 'ROLLING' # Stay in rolling phase for next player
+                print(f"No valid moves for {'White' if self.game.current_player == 1 else 'Black'} with roll {self.game.dice}. Starting feedback phase.")
+                # Set flag: Turn will switch after animation/feedback
+                self.pending_no_moves_switch = True
+                # Start the animation anyway to show the dice
+                self.game_phase = 'ROLLING_ANIMATION'
             else:
                 self.game_phase = 'ROLLING_ANIMATION' # Proceed to animation
+                self.pending_no_moves_switch = False # Ensure flag is reset if moves are possible
 
     def _go_back_to_menu(self):
         """Cleans up network and returns to the main menu."""

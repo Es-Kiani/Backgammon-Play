@@ -226,7 +226,7 @@ def calculate_blocked_points(board_points):
             black_blocked += 1
     return white_blocked, black_blocked
 
-def draw_sidebar(screen, game_phase, current_player, is_rolling_animation, animation_dice, dice, game_start_time, board_points, connection_status, white_borne_off, black_borne_off):
+def draw_sidebar(screen, game_phase, current_player, is_rolling_animation, animation_dice, dice, game_start_time, board_points, connection_status, white_borne_off, black_borne_off, local_player_id):
     """Draws the sidebar background and all UI elements within it."""
     sidebar_rect = pygame.Rect(SIDEBAR_X_START, 0, SIDEBAR_WIDTH, HEIGHT)
     pygame.draw.rect(screen, SIDEBAR_BG, sidebar_rect)
@@ -244,10 +244,12 @@ def draw_sidebar(screen, game_phase, current_player, is_rolling_animation, anima
     screen.blit(title_surf, title_rect)
 
     # --- Draw roll button ---
-    button_color = GREEN if game_phase == 'ROLLING' else LIGHT_BROWN
+    # Button active only if it's local player's turn to roll
+    is_my_turn_to_roll = (game_phase == 'ROLLING' and current_player == local_player_id)
+    button_color = GREEN if is_my_turn_to_roll else LIGHT_BROWN
     pygame.draw.rect(screen, button_color, BUTTON_RECT, border_radius=10)
     pygame.draw.rect(screen, BLACK, BUTTON_RECT, 2, border_radius=10)
-    button_text = font.render("Roll Dice", True, BLACK if game_phase == 'ROLLING' else SIDEBAR_TEXT)
+    button_text = font.render("Roll Dice", True, BLACK if is_my_turn_to_roll else SIDEBAR_TEXT)
     text_rect = button_text.get_rect(center=BUTTON_RECT.center)
     screen.blit(button_text, text_rect)
 
@@ -274,6 +276,13 @@ def draw_sidebar(screen, game_phase, current_player, is_rolling_animation, anima
     phase_text = small_font.render(phase_text_str, True, SIDEBAR_TEXT)
     phase_rect = phase_text.get_rect(left=SIDEBAR_X_START + UI_MARGIN_X, top=y_pos)
     screen.blit(phase_text, phase_rect)
+
+    # --- Draw "No Moves" message if applicable ---
+    if game_phase == 'NO_MOVES_FEEDBACK':
+        y_pos += INFO_LINE_HEIGHT * 0.5 # Small gap
+        no_moves_text = small_font.render("No valid moves!", True, RED)
+        no_moves_rect = no_moves_text.get_rect(left=SIDEBAR_X_START + UI_MARGIN_X, top=y_pos)
+        screen.blit(no_moves_text, no_moves_rect)
 
     # --- Draw Connection Status ---
     y_pos += INFO_LINE_HEIGHT
