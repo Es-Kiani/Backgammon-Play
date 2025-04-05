@@ -189,6 +189,9 @@ class App:
             if elapsed_time >= ANIMATION_DURATION:
                 self.is_rolling_animation = False
                 self.game_phase = 'MOVING'
+                # Send the state with the final dice roll AFTER animation finishes
+                if self.network:
+                    self._send_game_state(switch_player=False)
 
     def _send_game_state(self, switch_player=False):
         """Sends the current game state via the network."""
@@ -501,7 +504,8 @@ class App:
             # Draw Sidebar
             draw_sidebar(self.screen, self.game_phase, self.game.current_player,
                          self.is_rolling_animation, self.animation_dice, self.game.dice,
-                         self.game_start_time, self.game.board_points, self.connection_status)
+                         self.game_start_time, self.game.board_points, self.connection_status,
+                         self.game.white_borne_off, self.game.black_borne_off)
 
             # Draw Game Over screen if applicable
             if self.game_phase == 'GAME_OVER' and self.game.winner != 0:

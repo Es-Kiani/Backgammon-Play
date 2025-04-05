@@ -10,11 +10,13 @@ HEIGHT = 600
 # Colors (RGB)
 CREAM = (245, 245, 220)
 BROWN = (139, 69, 19)
-DARK_BROWN = (101, 67, 33)
+LIGHT_BROWN = (210, 180, 140) # Tan
+MEDIUM_BROWN = (188, 143, 143) # Rosy Brown
+BAR_BROWN = (127, 88, 88) 
 SIDEBAR_BG = (50, 50, 50) # Dark background for sidebar
 SIDEBAR_TEXT = (220, 220, 220) # Light text for sidebar
 BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
+WHITE = (235, 235, 235) # Changed to light grey instead of pure white
 RED = (255, 0, 0)
 GREEN = (0, 180, 0) # Brighter Green
 YELLOW = (255, 255, 0)
@@ -224,7 +226,7 @@ def calculate_blocked_points(board_points):
             black_blocked += 1
     return white_blocked, black_blocked
 
-def draw_sidebar(screen, game_phase, current_player, is_rolling_animation, animation_dice, dice, game_start_time, board_points, connection_status):
+def draw_sidebar(screen, game_phase, current_player, is_rolling_animation, animation_dice, dice, game_start_time, board_points, connection_status, white_borne_off, black_borne_off):
     """Draws the sidebar background and all UI elements within it."""
     sidebar_rect = pygame.Rect(SIDEBAR_X_START, 0, SIDEBAR_WIDTH, HEIGHT)
     pygame.draw.rect(screen, SIDEBAR_BG, sidebar_rect)
@@ -242,7 +244,7 @@ def draw_sidebar(screen, game_phase, current_player, is_rolling_animation, anima
     screen.blit(title_surf, title_rect)
 
     # --- Draw roll button ---
-    button_color = GREEN if game_phase == 'ROLLING' else DARK_BROWN
+    button_color = GREEN if game_phase == 'ROLLING' else LIGHT_BROWN
     pygame.draw.rect(screen, button_color, BUTTON_RECT, border_radius=10)
     pygame.draw.rect(screen, BLACK, BUTTON_RECT, 2, border_radius=10)
     button_text = font.render("Roll Dice", True, BLACK if game_phase == 'ROLLING' else SIDEBAR_TEXT)
@@ -297,6 +299,22 @@ def draw_sidebar(screen, game_phase, current_player, is_rolling_animation, anima
     black_blocked_rect = black_blocked_text.get_rect(left=SIDEBAR_X_START + UI_MARGIN_X + 10, top=y_pos)
     screen.blit(black_blocked_text, black_blocked_rect)
 
+    # --- Draw Borne Off Info ---
+    y_pos += INFO_LINE_HEIGHT * 1.5 # Add extra space
+    borne_off_title = small_font.render("Borne Off:", True, SIDEBAR_TEXT)
+    borne_off_title_rect = borne_off_title.get_rect(left=SIDEBAR_X_START + UI_MARGIN_X, top=y_pos)
+    screen.blit(borne_off_title, borne_off_title_rect)
+
+    y_pos += INFO_LINE_HEIGHT
+    white_borne_text = small_font.render(f"- White: {white_borne_off}", True, WHITE)
+    white_borne_rect = white_borne_text.get_rect(left=SIDEBAR_X_START + UI_MARGIN_X + 10, top=y_pos)
+    screen.blit(white_borne_text, white_borne_rect)
+
+    y_pos += INFO_LINE_HEIGHT
+    black_borne_text = small_font.render(f"- Black: {black_borne_off}", True, SIDEBAR_TEXT)
+    black_borne_rect = black_borne_text.get_rect(left=SIDEBAR_X_START + UI_MARGIN_X + 10, top=y_pos)
+    screen.blit(black_borne_text, black_borne_rect)
+
     # --- Draw Timer ---
     y_pos += INFO_LINE_HEIGHT * 1.5
     elapsed_ticks = pygame.time.get_ticks() - game_start_time
@@ -338,7 +356,7 @@ def draw_point_numbers(screen, valid_destination_indices):
 
         # Highlight if it's a valid destination
         if i in valid_destination_indices:
-            text_color = BLUE
+            text_color = GREEN
 
         number_text = small_font.render(str(point_number), True, text_color)
         number_rect = number_text.get_rect()
@@ -358,9 +376,9 @@ def draw_game_over_screen(screen, winner_player):
     overlay_surface.fill(overlay_color)
     screen.blit(overlay_surface, (0, 0))
 
-    # "Yes Daddy" message
+    # "Game Over!" message
     msg1_font = pygame.font.Font(None, 100)
-    msg1_text = msg1_font.render("Yes Daddy", True, YELLOW)
+    msg1_text = msg1_font.render("Game Over!", True, YELLOW)
     msg1_rect = msg1_text.get_rect(centerx=BOARD_AREA_WIDTH // 2, centery=HEIGHT // 2 - 40)
     screen.blit(msg1_text, msg1_rect)
 
@@ -384,19 +402,19 @@ def draw_board(screen, selected_point_index):
 
     # Draw main board area rectangle
     board_rect = pygame.Rect(BOARD_MARGIN_X, BOARD_MARGIN_Y, BOARD_WIDTH, BOARD_HEIGHT)
-    pygame.draw.rect(screen, BROWN, board_rect)
+    pygame.draw.rect(screen, MEDIUM_BROWN, board_rect)
 
     # Draw the bar
     bar_x = BOARD_MARGIN_X + 6 * POINT_WIDTH
     bar_rect = pygame.Rect(bar_x, BOARD_MARGIN_Y, BAR_WIDTH, BOARD_HEIGHT)
-    pygame.draw.rect(screen, DARK_BROWN, bar_rect)
+    pygame.draw.rect(screen, BAR_BROWN, bar_rect) # Match the main board color
 
     # Draw the points (triangles)
     for i in range(24):
         point_rect = get_point_rect(i)
-        color = DARK_BROWN if i % 2 == 0 else CREAM
+        color = LIGHT_BROWN if i % 2 == 0 else CREAM
         if i >= 12:
-            color = CREAM if i % 2 == 0 else DARK_BROWN
+            color = CREAM if i % 2 == 0 else LIGHT_BROWN
 
         # Define triangle vertices based on row
         if 0 <= i <= 11: # Bottom row points up
@@ -446,8 +464,15 @@ def draw_checkers(screen, board_points):
             checker_x = point_rect.centerx
 
             # Draw checker
+            # Add a slight 3D effect
+            highlight_color = tuple(min(c + 40, 255) for c in (color if color != BLACK else (50, 50, 50))) # Brighter version
+            shadow_color = tuple(max(c - 40, 0) for c in color) # Darker version
+            pygame.draw.circle(screen, shadow_color, (checker_x + 1, int(checker_y) + 1), CHECKER_RADIUS)
             pygame.draw.circle(screen, color, (checker_x, int(checker_y)), CHECKER_RADIUS)
-            pygame.draw.circle(screen, BLACK if color == WHITE else WHITE, (checker_x, int(checker_y)), CHECKER_RADIUS, 1)
+            # Black border for white checkers, white border for black checkers
+            border_color = BLACK if color == WHITE else WHITE
+            pygame.draw.circle(screen, border_color, (checker_x, int(checker_y)), CHECKER_RADIUS, 2) # Thicker border
+            pygame.draw.circle(screen, highlight_color, (checker_x, int(checker_y)), CHECKER_RADIUS - 2, 1) # Inner highlight
 
         # If more checkers than display limit, draw count
         if abs_num > max_checkers_display:
@@ -474,8 +499,15 @@ def draw_checkers(screen, board_points):
             checker_x = BAR_CENTER_X
 
             # Draw checker
+            # Add a slight 3D effect
+            highlight_color = tuple(min(c + 40, 255) for c in (color if color != BLACK else (50, 50, 50))) # Brighter version
+            shadow_color = tuple(max(c - 40, 0) for c in color) # Darker version
+            pygame.draw.circle(screen, shadow_color, (int(checker_x) + 1, int(checker_y) + 1), CHECKER_RADIUS)
             pygame.draw.circle(screen, color, (int(checker_x), int(checker_y)), CHECKER_RADIUS)
-            pygame.draw.circle(screen, BLACK if color == WHITE else WHITE, (int(checker_x), int(checker_y)), CHECKER_RADIUS, 1)
+            # Black border for white checkers, white border for black checkers
+            border_color = BLACK if color == WHITE else WHITE
+            pygame.draw.circle(screen, border_color, (int(checker_x), int(checker_y)), CHECKER_RADIUS, 2) # Thicker border
+            pygame.draw.circle(screen, highlight_color, (int(checker_x), int(checker_y)), CHECKER_RADIUS - 2, 1) # Inner highlight
 
         # If more checkers than display limit, draw count
         if abs_num > max_checkers_display:
