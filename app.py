@@ -576,6 +576,14 @@ class App:
                     self.selected_point_index = None
                     self.valid_destination_indices.clear()
                     self.is_rolling_animation = False
+                # <<< START FIX >>>
+                # If game is not over and it's now our turn after receiving state, set phase to ROLLING
+                elif self.game.winner == 0 and self.game.current_player == self.player_id:
+                    print("Received turn, setting phase to ROLLING.")
+                    self.game_phase = 'ROLLING'
+                    self.selected_point_index = None # Reset selection when turn starts
+                    self.valid_destination_indices.clear()
+                # <<< END FIX >>>
 
         # --- Phase-Specific Updates ---\
         if self.game_phase == 'WAITING_FOR_CLIENT':
