@@ -18,7 +18,7 @@ A classic Backgammon game implemented in Python using the Pygame library. This p
 
 ## Screenshots
 
-![Alt text](images/screenplay.jpg)
+![In Game Screenshot](images/screenplay.jpg)
 
 
 ## Dependencies
