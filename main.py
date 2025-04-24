@@ -1,3 +1,4 @@
+# main.py
 import pygame
 import sys
 from app import App # Import the App class from app.py

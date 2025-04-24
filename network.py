@@ -1,3 +1,4 @@
+# network.py
 import socket
 import pickle
 import sys
@@ -77,12 +78,11 @@ class Network:
             print(f"Connecting to {self.addr}...")
             self.client.connect(self.addr)
             print("Connected. Waiting for player assignment...")
-            # First message from server should be the player ID
             initial_data = self._receive(self.client)
             if initial_data and 'id' in initial_data:
                 self.id = initial_data['id']
                 print(f"Assigned Player ID: {self.id}")
-                self.client.setblocking(False) # Set to non-blocking after connection
+                self.client.setblocking(False)
                 return self.id
             else:
                 print("Failed to receive player ID from server.")
@@ -105,7 +105,6 @@ class Network:
 
     def receive_from_server(self):
         if not self.id:
-             # print("Cannot receive, not connected.") # Can be noisy
              return None
         return self._receive(self.client)
 
@@ -115,23 +114,18 @@ class Network:
         self.host = host
         self.addr = (self.host, self.port)
         try:
-            # Allow reusing the address quickly after closing
             self.client.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.client.bind(self.addr)
-            self.client.listen(1) # Listen for one connection
+            self.client.listen(1)
             print(f"Server started on {self.host}:{self.port}. Waiting for opponent...")
-            self.conn, addr = self.client.accept() # Blocking call
+            self.conn, addr = self.client.accept()
             print(f"Opponent connected from {addr}")
-            self.id = 1 # Server is always player 1 (White)
-            
-            # Send player ID to the connected client
-            if not self._send(self.conn, {'id': -1}): # Client is player -1 (Black)
+            self.id = 1
+            if not self._send(self.conn, {'id': -1}):
                  raise Exception("Failed to send initial ID to client")
-            
             print("Sent player assignment to opponent. Game can start.")
-            self.conn.setblocking(False) # Set to non-blocking after connection
+            self.conn.setblocking(False)
             return True 
-            
         except socket.error as e:
             print(f"Server Error: {e}")
             self.close()
@@ -149,40 +143,37 @@ class Network:
 
     def receive_from_client(self):
         if not self.conn:
-            # print("Cannot receive, no client connected.") # Can be noisy
             return None
         return self._receive(self.conn)
         
     # --- Generic Send/Receive (Based on Role) ---
     def send(self, data):
-        if self.id == 1: # Server sends to client
+        if self.id == 1:
             return self.send_to_client(data)
-        elif self.id == -1: # Client sends to server
+        elif self.id == -1:
             return self.send_to_server(data)
         else:
-            # print("Cannot send, role not determined")
             return False
             
     def receive(self):
-         if self.id == 1: # Server receives from client
+         if self.id == 1:
             return self.receive_from_client()
-         elif self.id == -1: # Client receives from server
+         elif self.id == -1:
             return self.receive_from_server()
          else:
-             # print("Cannot receive, role not determined")
              return None
 
     # --- Cleanup ---
     def close(self):
         print("Closing network connection...")
-        if self.conn: # If server, close client connection
+        if self.conn:
             try:
                 self.conn.close()
             except socket.error as e:
                  print(f"Error closing connection socket: {e}")
             self.conn = None
-        try: # Close main socket
+        try:
             self.client.close()
         except socket.error as e:
              print(f"Error closing main socket: {e}")
-        self.id = None 
+        self.id = None

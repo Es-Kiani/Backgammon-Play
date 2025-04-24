@@ -1,3 +1,4 @@
+# config.yaml
 network:
   default_host_ip: "192.168.3.96"  # Default localhost IP
-  default_port: 5555            # Default port number 
+  default_port: 5555               # Default port number
