@@ -34,6 +34,11 @@ CHECKER_RADIUS = int(POINT_WIDTH * 0.4)
 BAR_CENTER_X = BOARD_MARGIN_X + 6 * POINT_WIDTH + BAR_WIDTH / 2
 
 # --- Sidebar UI Constants ---
+# --- Save/Load/Undo Buttons ---
+SAVE_BUTTON_RECT = pygame.Rect(SIDEBAR_X_START + UI_MARGIN_X, 300, BUTTON_WIDTH, BUTTON_HEIGHT)
+LOAD_BUTTON_RECT = pygame.Rect(SIDEBAR_X_START + UI_MARGIN_X, 350, BUTTON_WIDTH, BUTTON_HEIGHT)
+UNDO_BUTTON_RECT = pygame.Rect(SIDEBAR_X_START + UI_MARGIN_X, 400, BUTTON_WIDTH, BUTTON_HEIGHT)
+
 UI_MARGIN_X = 20 # Padding inside sidebar
 UI_MARGIN_Y = 20
 SIDEBAR_X_START = BOARD_AREA_WIDTH
@@ -227,6 +232,7 @@ def calculate_blocked_points(board_points):
     return white_blocked, black_blocked
 
 def draw_sidebar(screen, game_phase, current_player, is_rolling_animation, animation_dice, dice, game_start_time, board_points, connection_status, white_borne_off, black_borne_off):
+    # Add `game_timers` to args if not present (manual fix required in app.py too)
     """Draws the sidebar background and all UI elements within it."""
     sidebar_rect = pygame.Rect(SIDEBAR_X_START, 0, SIDEBAR_WIDTH, HEIGHT)
     pygame.draw.rect(screen, SIDEBAR_BG, sidebar_rect)
@@ -333,7 +339,32 @@ def draw_sidebar(screen, game_phase, current_player, is_rolling_animation, anima
     timer_rect = timer_text.get_rect(left=SIDEBAR_X_START + UI_MARGIN_X, top=y_pos)
     screen.blit(timer_text, timer_rect)
 
-    # --- Draw Reset Button ---
+    
+    # --- Draw Player Timers ---
+    white_time_ms, black_time_ms = game_timers.get_times()
+    white_minutes, white_seconds = divmod(white_time_ms // 1000, 60)
+    black_minutes, black_seconds = divmod(black_time_ms // 1000, 60)
+
+    y_pos += INFO_LINE_HEIGHT * 2
+    white_timer_text = small_font.render(f"White Time: {white_minutes:02d}:{white_seconds:02d}", True, WHITE)
+    black_timer_text = small_font.render(f"Black Time: {black_minutes:02d}:{black_seconds:02d}", True, SIDEBAR_TEXT)
+    screen.blit(white_timer_text, (SIDEBAR_X_START + UI_MARGIN_X, y_pos))
+    y_pos += INFO_LINE_HEIGHT
+    screen.blit(black_timer_text, (SIDEBAR_X_START + UI_MARGIN_X, y_pos))
+
+    # --- Save/Load/Undo Buttons ---
+    for rect, text, color in [
+        (SAVE_BUTTON_RECT, "Save Game", GREEN),
+        (LOAD_BUTTON_RECT, "Load Game", BLUE),
+        (UNDO_BUTTON_RECT, "Undo Move", YELLOW)
+    ]:
+        pygame.draw.rect(screen, color, rect, border_radius=10)
+        pygame.draw.rect(screen, BLACK, rect, 2, border_radius=10)
+        text_surf = font.render(text, True, BLACK)
+        text_rect = text_surf.get_rect(center=rect.center)
+        screen.blit(text_surf, text_rect)
+
+# --- Draw Reset Button ---
     reset_color = (200, 100, 100) # Reddish
     pygame.draw.rect(screen, reset_color, RESET_BUTTON_RECT, border_radius=10)
     pygame.draw.rect(screen, BLACK, RESET_BUTTON_RECT, 2, border_radius=10)

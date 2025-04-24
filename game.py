@@ -13,6 +13,7 @@ class Game:
         self.white_borne_off = 0
         self.black_borne_off = 0
         self.winner = 0              # 0: No winner, 1: White, -1: Black
+        self.move_history = []
         self.reset()
 
     def _setup_initial_board(self):
@@ -207,6 +208,7 @@ class Game:
     def make_move(self, start_index, die_roll):
         """Attempts to make a move for the current player using a specific die roll.
            Returns True if the move was successful, False otherwise."""
+        self.move_history.append(self.get_state().copy())
         player = self.current_player
 
         is_valid, target_index = self.is_move_valid(start_index, die_roll)
@@ -273,3 +275,12 @@ class Game:
         self.black_borne_off = state_dict.get('black_borne_off', self.black_borne_off)
         self.winner = state_dict.get('winner', self.winner)
         # print("Game state updated from received data.")
+
+    def undo_last_move(self):
+        if not self.move_history:
+            print("No moves to undo.")
+            return False
+        last_state = self.move_history.pop()
+        self.apply_state(last_state)
+        print("Undo performed.")
+        return True

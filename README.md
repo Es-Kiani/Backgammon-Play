@@ -16,6 +16,11 @@ A classic Backgammon game implemented in Python using the Pygame library. This p
     *   Display of game state (current player, phase, time, connection status).
 *   **Game Controls:** Reset the game or return to the main menu via sidebar buttons.
 
+*   **Game Saving and Loading:** Save your game progress and load it back at any time.
+*   **Undo Last Move:** Allows each player to undo their last move during a turn.
+*   **Per-Player Timer:** Track elapsed time for each player during the game.
+
+
 ## Screenshots
 
 ![In Game Screenshot](images/screenplay.jpg)

@@ -9,6 +9,8 @@ import threading # For non-blocking server start
 import yaml  # Add YAML import
 from network import Network # Import the class directly
 from game import Game
+from storage import save_game_state, load_game_state
+from timer import PlayerTimers
 
 # --- Import UI elements ---
 # TODO: Review if ALL these are needed directly by App or only by drawing functions
@@ -58,6 +60,9 @@ class App:
         self.game_phase = 'MAIN_MENU'
         self.selected_point_index = None
         self.valid_destination_indices = set()
+        self.player_timers = PlayerTimers()
+        self.white_time_total = 0
+        self.black_time_total = 0
 
         # Animation state
         self.animation_start_time = 0
@@ -302,7 +307,8 @@ class App:
                              print(f"No valid moves left for Player {self.game.current_player} with remaining dice {self.game.moves_left}. Ending turn.")
                         if self.network:
                             self._send_game_state(switch_player=True)
-                        self.game.switch_player() # Switch player in game state
+                        self.player_timers.switch_turn(self.game.current_player)
+        self.game.switch_player() # Switch player in game state
 
     def _update_animation(self):
         """Update the dice animation state."""
@@ -359,7 +365,8 @@ class App:
         self.network = None
         self.player_id = 1 # Default to player 1 in offline
         self.connection_status = "Offline Mode"
-        self.game.reset() # Reset game state using game object
+        self.game.reset()
+        self.player_timers = PlayerTimers() # Reset game state using game object
         self.game_start_time = pygame.time.get_ticks()
         self.game_phase = 'ROLLING'
         self.selected_point_index = None # Reset UI state
@@ -615,7 +622,8 @@ class App:
                 print("Feedback delay over. Switching turn.")
                 if self.network:
                     self._send_game_state(switch_player=True)
-                self.game.switch_player()
+                self.player_timers.switch_turn(self.game.current_player)
+        self.game.switch_player()
                 self.game_phase = 'ROLLING'
 
     def _draw(self):
@@ -766,6 +774,7 @@ class App:
             if RESET_BUTTON_RECT.collidepoint(event.pos):
                  if self.network is None or self.player_id == 1:
                      self.game.reset()
+        self.player_timers = PlayerTimers()
                      self.game_start_time = pygame.time.get_ticks()
                      self.selected_point_index = None # Reset UI
                      self.valid_destination_indices.clear()
@@ -777,7 +786,13 @@ class App:
             elif is_my_turn and BUTTON_RECT.collidepoint(event.pos) and self.game_phase == 'ROLLING':
                  self._attempt_roll()
             # Board Clicks
-            elif is_my_turn and self.game_phase == 'MOVING' and event.pos[0] < SIDEBAR_X_START:
+            
+            elif pygame.Rect(850, 300, 120, 40).collidepoint(event.pos):
+                self._save_game()
+            elif pygame.Rect(850, 350, 120, 40).collidepoint(event.pos):
+                self._load_game()
+            elif pygame.Rect(850, 400, 120, 40).collidepoint(event.pos):
+                self._undo_move() and event.pos[0] < SIDEBAR_X_START:
                 self._handle_click(event.pos)
 
     # --- Update Sub-Methods ---
@@ -787,6 +802,7 @@ class App:
                 self.player_id = 1
                 self.connection_status = f"Hosting | Client Connected | You: White (P{self.player_id})"
                 self.game.reset()
+        self.player_timers = PlayerTimers()
                 self.game_start_time = pygame.time.get_ticks()
                 self._send_game_state() # Send initial state
                 self.game_phase = 'ROLLING'
@@ -860,3 +876,22 @@ class App:
             self.network.close()
         pygame.quit()
         sys.exit()
+    def _save_game(self):
+        state = self.game.get_state()
+        save_game_state('saved_game.json', state, self.game.move_history)
+        print("Game saved to saved_game.json")
+
+    def _load_game(self):
+        try:
+            state, history = load_game_state('saved_game.json')
+            self.game.apply_state(state)
+            self.game.move_history = history
+            print("Game loaded from saved_game.json")
+        except Exception as e:
+            print(f"Failed to load game: {e}")
+
+    def _undo_move(self):
+        success = self.game.undo_last_move()
+        if success:
+            self.selected_point_index = None
+            self.valid_destination_indices.clear()
